@@ -1,0 +1,102 @@
+[
+  {
+    "question": "Como criar um índice HNSW?",
+    "expected": "pgvector.md",
+    "must_contain": "using hnsw"
+  },
+  {
+    "question": "Qual operador usar para distância de cosseno?",
+    "expected": "pgvector.md",
+    "must_contain": "vector_cosine_ops"
+  },
+  {
+    "question": "Como instalar a extensão vector no Postgres?",
+    "expected": "pgvector.md",
+    "must_contain": "create extension vector"
+  },
+  {
+    "question": "Qual o número máximo de dimensões de um vetor indexado?",
+    "expected": "pgvector.md",
+    "must_contain": "2,000 dimensions"
+  },
+  {
+    "question": "Qual a diferença entre índices HNSW e IVFFlat?",
+    "expected": "pgvector.md",
+    "must_contain": "ivfflat"
+  },
+  {
+    "question": "Como testar endpoints usando TestClient?",
+    "expected": "fastapi-testing.md",
+    "must_contain": "testclient"
+  },
+  {
+    "question": "Como executar uma tarefa em segundo plano depois de responder?",
+    "expected": "fastapi-background-tasks.md",
+    "must_contain": "backgroundtasks"
+  },
+  {
+    "question": "Como dividir a aplicação em vários arquivos com APIRouter?",
+    "expected": "fastapi-bigger-apps.md",
+    "must_contain": "apirouter"
+  },
+  {
+    "question": "O que faz Depends e como funciona injeção de dependência?",
+    "expected": "fastapi-dependencies.md",
+    "must_contain": "depends"
+  },
+  {
+    "question": "Quando usar def em vez de async def numa rota?",
+    "expected": "fastapi-async.md",
+    "must_contain": "async def"
+  },
+  {
+    "question": "Como declarar parâmetros de query opcionais?",
+    "expected": "fastapi-query-params.md",
+    "must_contain": "query parameters"
+  },
+  {
+    "question": "Como receber um corpo JSON validado por um modelo Pydantic?",
+    "expected": "fastapi-body.md",
+    "must_contain": "basemodel"
+  },
+  {
+    "question": "Como escrever o Dockerfile de uma aplicação FastAPI?",
+    "expected": "fastapi-deployment-docker.md",
+    "must_contain": "from python"
+  },
+  {
+    "question": "Devo usar múltiplos workers dentro de um contêiner?",
+    "expected": "fastapi-deployment-docker.md",
+    "must_contain": "workers"
+  },
+  {
+    "question": "O que é um decorador de path operation?",
+    "expected": "fastapi-first-steps.md",
+    "must_contain": "path operation decorator"
+  },
+  {
+    "question": "Como proteger rotas com autenticação?",
+    "expected": "fastapi-security-intro.md",
+    "must_contain": "oauth2"
+  },
+  {
+    "question": "Como configurar min_size e max_size do pool de conexões?",
+    "expected": "psycopg-pool.md",
+    "must_contain": "min_size"
+  },
+  {
+    "question": "Como passar parâmetros para uma query com segurança?",
+    "expected": "psycopg-basic-usage.md",
+    "must_contain": "%s"
+  },
+  {
+    "question": "Como declarar healthcheck de um serviço?",
+    "expected": "compose-file-reference.md",
+    "must_contain": "healthcheck"
+  },
+  {
+    "question": "Como fazer um serviço esperar outro ficar saudável?",
+    "expected": "compose-file-reference.md",
+    "must_contain": "service_healthy"
+  }
+]
