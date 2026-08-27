@@ -63,9 +63,11 @@ RAG resolve buscando os trechos relevantes e injetando no prompt. O difícil nã
 | vetorial | 0,80 | 0,683 |
 | lexical | **0,00** | 0,000 |
 | híbrida | 0,80 | 0,683 |
-| **híbrida + rerank** | **0,90** | **0,693** |
+| **híbrida + rerank** | **0,95** | **0,712** |
 
-**A busca lexical zera fora do idioma do corpus** — `to_tsvector('english', …)` não casa "índice" com "index", e nenhum ajuste de peso salva um ranking vazio. Os embeddings atravessam o idioma sem esforço. É o argumento mais concreto a favor do híbrido: as duas pernas falham por motivos diferentes, e é justamente aí que o reranking mais rende (+10 pontos de recall quando uma das pernas não contribui).
+Os resultados brutos de cada rodada ficam em `eval/results/`. O reranking usa um LLM: rodadas diferentes variam em uma ou duas perguntas mesmo com `temperature=0`, então trate a terceira casa como ruído.
+
+**A busca lexical zera fora do idioma do corpus** — `to_tsvector('english', …)` não casa "índice" com "index", e nenhum ajuste de peso salva um ranking vazio. Os embeddings atravessam o idioma sem esforço. É o argumento mais concreto a favor do híbrido: as duas pernas falham por motivos diferentes, e é justamente aí que o reranking mais rende (+15 pontos de recall quando uma das pernas não contribui).
 
 ### Latência
 

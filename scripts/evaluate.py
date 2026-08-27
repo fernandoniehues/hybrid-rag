@@ -93,9 +93,10 @@ def main() -> int:
               f"{str(l['mrr']).ljust(8)}{l['acertos']}")
 
     Path("eval/results").mkdir(parents=True, exist_ok=True)
-    Path("eval/results/latest.json").write_text(
-        json.dumps(linhas, indent=2, ensure_ascii=False), encoding="utf-8")
-    print("\nresultados em eval/results/latest.json")
+    nome = Path(args.questions).stem
+    destino = Path(f"eval/results/{nome}-k{args.k}.json")
+    destino.write_text(json.dumps(linhas, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"\nresultados em {destino}")
     return 0
 
 

@@ -1,0 +1,26 @@
+[
+  {
+    "estrategia": "vector",
+    "recall@5": 0.75,
+    "mrr": 0.637,
+    "acertos": "15/20"
+  },
+  {
+    "estrategia": "text",
+    "recall@5": 0.4,
+    "mrr": 0.362,
+    "acertos": "8/20"
+  },
+  {
+    "estrategia": "hybrid",
+    "recall@5": 0.75,
+    "mrr": 0.654,
+    "acertos": "15/20"
+  },
+  {
+    "estrategia": "hybrid + rerank",
+    "recall@5": 0.8,
+    "mrr": 0.667,
+    "acertos": "16/20"
+  }
+]

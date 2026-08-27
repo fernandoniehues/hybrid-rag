@@ -19,8 +19,8 @@
   },
   {
     "estrategia": "hybrid + rerank",
-    "recall@5": 0.9,
-    "mrr": 0.693,
-    "acertos": "18/20"
+    "recall@5": 0.95,
+    "mrr": 0.712,
+    "acertos": "19/20"
   }
 ]

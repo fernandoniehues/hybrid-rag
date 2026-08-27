@@ -5,7 +5,7 @@ services:
       POSTGRES_USER: rag
       POSTGRES_PASSWORD: rag
       POSTGRES_DB: rag
-    ports: ["55436:5432"]
+    ports: ["${DB_PORT:-5433}:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -22,8 +22,8 @@ services:
       DATABASE_URL: postgresql://rag:rag@db:5432/rag
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       GROQ_API_KEY: ${GROQ_API_KEY}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
     ports: ["8000:8000"]
     volumes:
       - ./corpus:/app/corpus:ro
