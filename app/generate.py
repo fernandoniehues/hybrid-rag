@@ -10,14 +10,20 @@ para uma base de conhecimento.
 from app.llm import complete
 from app.search import Hit
 
-SYSTEM = """Você responde perguntas usando APENAS os trechos fornecidos.
+# O prompt é escrito em inglês de propósito: com as instruções em português,
+# o modelo respondia em português mesmo quando a pergunta vinha em inglês —
+# o idioma do system prompt vazava para a resposta.
+SYSTEM = """Answer the question using ONLY the provided excerpts.
 
-Regras:
-- Se os trechos não contêm a resposta, diga exatamente: "Não encontrei essa
-  informação nos documentos indexados." Não complete com conhecimento próprio.
-- Cite a fonte de cada afirmação com o número do trecho, assim: [1], [2].
-- Seja direto. Sem introdução e sem repetir a pergunta.
-- Responda no idioma da pergunta."""
+Rules:
+- ALWAYS answer in the same language as the question. If the question is in
+  English, answer in English. If it is in Portuguese, answer in Portuguese.
+  The language of the excerpts does not matter.
+- If the excerpts do not contain the answer, say exactly (in the question's
+  language): "I could not find this information in the indexed documents."
+  Never fill the gap with your own knowledge.
+- Cite the source of every claim with the excerpt number: [1], [2].
+- Be direct. No preamble, no restating the question."""
 
 
 def build_context(hits: list[Hit]) -> str:
