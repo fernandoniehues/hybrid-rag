@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from app import db, generate
+from app.graph import run as run_agent
 from app.config import get_settings
 from app.ingest import ingest_directory
 from app.rerank import rerank
@@ -50,6 +51,19 @@ class AskRequest(BaseModel):
     top_k: int | None = None
     mode: str = Field(default="hybrid", pattern="^(vector|text|hybrid)$")
     use_rerank: bool = True
+
+
+class AgentRequest(BaseModel):
+    question: str
+
+
+class AgentResponse(BaseModel):
+    answer: str
+    sources: list["SearchResponse"]
+    attempts: int
+    grade: float | None
+    trace: list[str]
+    elapsed_ms: int
 
 
 class AskResponse(BaseModel):
@@ -105,4 +119,24 @@ def ask(req: AskRequest):
         elapsed_ms=int((time.perf_counter() - started) * 1000),
         mode=req.mode,
         reranked=req.use_rerank,
+    )
+
+
+@app.post("/agent", response_model=AgentResponse)
+def agent(req: AgentRequest):
+    """RAG corretivo com LangGraph.
+
+    Diferente de /ask, aqui o sistema julga o que recuperou e reformula a
+    consulta quando o material não serve. `trace` devolve o caminho percorrido
+    — é o que permite depurar por que uma resposta saiu como saiu.
+    """
+    started = time.perf_counter()
+    out = run_agent(req.question)
+    return AgentResponse(
+        answer=out["answer"],
+        sources=[SearchResponse(**vars(h)) for h in out["documents"]],
+        attempts=out["attempts"],
+        grade=out["grade"],
+        trace=out["trace"],
+        elapsed_ms=int((time.perf_counter() - started) * 1000),
     )
