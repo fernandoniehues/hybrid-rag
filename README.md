@@ -1,5 +1,7 @@
 # Hybrid RAG
 
+**English** · [Português](README.pt-BR.md)
+
 A RAG (Retrieval-Augmented Generation) pipeline with **hybrid search**, **reranking**, and **measured evaluation** — built to answer questions over a document base while citing the source of every claim.
 
 The whole stack comes up with one command. Every number in this README was measured in this repository, not estimated.
