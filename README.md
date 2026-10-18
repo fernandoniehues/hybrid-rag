@@ -1,11 +1,11 @@
 # Hybrid RAG
 
-Pipeline de RAG (Retrieval-Augmented Generation) com **busca híbrida**, **reranking** e **avaliação medida** — construído para responder perguntas sobre uma base de documentos citando a fonte de cada afirmação.
+A RAG (Retrieval-Augmented Generation) pipeline with **hybrid search**, **reranking**, and **measured evaluation** — built to answer questions over a document base while citing the source of every claim.
 
-Sobe inteiro com um comando. Todos os números deste README foram medidos neste repositório, não estimados.
+The whole stack comes up with one command. Every number in this README was measured in this repository, not estimated.
 
 ```bash
-cp .env.example .env          # coloque sua OPENAI_API_KEY
+cp .env.example .env          # add your OPENAI_API_KEY
 docker compose up -d --build
 python scripts/fetch_corpus.py corpus
 curl -X POST localhost:8000/ingest -d '{"directory":"corpus"}' -H 'Content-Type: application/json'
@@ -14,187 +14,187 @@ curl -X POST localhost:8000/ask   -d '{"question":"How do I create an HNSW index
 
 ---
 
-## O problema
+## The problem
 
-Um LLM só sabe o que estava no treino e o que cabe no prompt. Perguntas sobre documentação interna, manual ou base de conhecimento ele não tem como responder — e o pior modo de falha é responder mesmo assim, com confiança.
+An LLM only knows what was in its training data and what fits in the prompt. It has no way to answer questions about internal documentation, manuals, or a knowledge base — and the worst failure mode is answering anyway, with confidence.
 
-RAG resolve buscando os trechos relevantes e injetando no prompt. O difícil não é a ideia, é **recuperar o trecho certo**: o que não chega ao modelo não vira resposta.
+RAG solves this by retrieving the relevant passages and injecting them into the prompt. The hard part isn't the idea, it's **retrieving the right passage**: what never reaches the model never makes it into the answer.
 
-## Arquitetura
+## Architecture
 
 ```
                   ┌─────────────────────────────────────────┐
-   documentos ──► │ chunking por cabeçalho + sobreposição   │
+   documents ───► │ heading-based chunking + overlap        │
                   └────────────────┬────────────────────────┘
                                    ▼
                   ┌─────────────────────────────────────────┐
-                  │ embeddings em lote → PostgreSQL/pgvector│
-                  │ + tsvector gerado (full-text)           │
+                  │ batched embeddings → PostgreSQL/pgvector│
+                  │ + generated tsvector (full-text)        │
                   └─────────────────────────────────────────┘
 
-   pergunta ──┬──► busca vetorial (HNSW, cosseno) ──┐
-              │                                     ├─► RRF ─► rerank ─► LLM ─► resposta
-              └──► busca lexical (tsquery, GIN)  ───┘                            + citações
+   question ──┬──► vector search (HNSW, cosine) ────┐
+              │                                     ├─► RRF ─► rerank ─► LLM ─► answer
+              └──► lexical search (tsquery, GIN) ───┘                           + citations
 ```
 
-**Busca híbrida.** A vetorial acha por significado, mas erra com nome próprio, sigla e número de versão. A lexical acerta o termo exato, mas não entende sinônimo. As duas rodam em paralelo e são fundidas por **Reciprocal Rank Fusion** — cada documento pontua `1/(k + posição)` em cada ranking e os pontos somam, o que dispensa normalizar escores de escalas incompatíveis (distância de cosseno × `ts_rank`).
+**Hybrid search.** Vector search finds by meaning, but stumbles on proper nouns, acronyms, and version numbers. Lexical search nails the exact term, but doesn't understand synonyms. Both legs run on every query and are merged with **Reciprocal Rank Fusion** — each document scores `1/(k + rank)` in each ranking and the scores add up, which avoids normalizing scores on incompatible scales (cosine distance vs. `ts_rank`).
 
-**Reranking.** A busca é otimizada para trazer muitos candidatos plausíveis rápido; ela não julga bem qual responde à pergunta. O reranker lê 20 candidatos e devolve uma nota de relevância para cada — o custo caro é gasto onde rende. As chamadas são independentes, então rodam concorrentes.
+**Reranking.** Search is optimized to bring back many plausible candidates fast; it's not good at judging which one actually answers the question. The reranker reads 20 candidates and returns a relevance score for each — the expensive work is spent where it pays off. The calls are independent, so they run concurrently.
 
-**Geração ancorada.** O modelo responde apenas com os trechos recuperados, cita `[n]` em cada afirmação, e tem instrução explícita de dizer que não encontrou quando o material não cobre a pergunta.
+**Grounded generation.** The model answers using only the retrieved passages, cites `[n]` for every claim, and is explicitly instructed to say it found nothing when the material doesn't cover the question.
 
-## Resultados medidos
+## Measured results
 
-20 perguntas com gabarito, corpus de 14 documentos técnicos (647 chunks). O acerto é contado **em nível de chunk**: não basta o arquivo certo aparecer, o trecho recuperado precisa conter a resposta.
+20 questions with ground-truth answers, over a corpus of 14 technical documents (647 chunks). A hit is counted **at the chunk level**: the right file showing up isn't enough — the retrieved passage must contain the answer.
 
-### Perguntas no mesmo idioma do corpus (inglês)
+### Questions in the corpus language (English)
 
-| estratégia | recall@1 | recall@5 | MRR@5 |
+| strategy | recall@1 | recall@5 | MRR@5 |
 |---|---|---|---|
-| vetorial | 0,55 | 0,75 | 0,637 |
-| lexical | 0,35 | 0,40 | 0,362 |
-| **híbrida** | **0,60** | 0,75 | 0,654 |
-| **híbrida + rerank** | 0,60 | **0,80** | **0,667** |
+| vector | 0.55 | 0.75 | 0.637 |
+| lexical | 0.35 | 0.40 | 0.362 |
+| **hybrid** | **0.60** | 0.75 | 0.654 |
+| **hybrid + rerank** | 0.60 | **0.80** | **0.667** |
 
-### Perguntas em português, corpus em inglês
+### Portuguese questions, English corpus
 
-| estratégia | recall@5 | MRR@5 |
+| strategy | recall@5 | MRR@5 |
 |---|---|---|
-| vetorial | 0,80 | 0,683 |
-| lexical | **0,00** | 0,000 |
-| híbrida | 0,80 | 0,683 |
-| **híbrida + rerank** | **0,95** | **0,712** |
+| vector | 0.80 | 0.683 |
+| lexical | **0.00** | 0.000 |
+| hybrid | 0.80 | 0.683 |
+| **hybrid + rerank** | **0.95** | **0.712** |
 
-Os resultados brutos de cada rodada ficam em `eval/results/`. O reranking usa um LLM: rodadas diferentes variam em uma ou duas perguntas mesmo com `temperature=0`, então trate a terceira casa como ruído.
+The raw results of each run are in `eval/results/`. Reranking uses an LLM: separate runs differ by one or two questions even at `temperature=0`, so treat the third decimal place as noise.
 
-**A busca lexical zera fora do idioma do corpus** — `to_tsvector('english', …)` não casa "índice" com "index", e nenhum ajuste de peso salva um ranking vazio. Os embeddings atravessam o idioma sem esforço. É o argumento mais concreto a favor do híbrido: as duas pernas falham por motivos diferentes, e é justamente aí que o reranking mais rende (+15 pontos de recall quando uma das pernas não contribui).
+**Lexical search drops to zero outside the corpus language** — `to_tsvector('english', …)` won't match "índice" with "index", and no amount of weight tuning rescues an empty ranking. Embeddings cross languages effortlessly. This is the most concrete argument for going hybrid: the two legs fail for different reasons, and that's exactly where reranking pays off the most (+15 recall points when one of the legs contributes nothing).
 
-### Latência
+### Latency
 
-| configuração | tempo |
+| configuration | time |
 |---|---|
-| sem reranking | ~2,8 s |
-| reranking sequencial | ~16,1 s |
-| **reranking paralelo** | **~4,2 s** |
+| no reranking | ~2.8 s |
+| sequential reranking | ~16.1 s |
+| **parallel reranking** | **~4.2 s** |
 
-O reranking sequencial dominava a latência: uma chamada curta por candidato, uma depois da outra. Como são independentes, passaram a rodar concorrentes — o tempo virou o da chamada mais lenta, não a soma.
+Sequential reranking dominated latency: one short call per candidate, one after another. Since the calls are independent, they now run concurrently — total time became that of the slowest call, not the sum.
 
-## Decisões de engenharia
+## Engineering decisions
 
-**Avaliação em nível de chunk, não de documento.** A primeira versão media se o *arquivo* certo aparecia. Com 14 documentos, todas as estratégias empatavam em 0,95 e o experimento não dizia nada. Medindo o trecho, as diferenças apareceram.
+**Chunk-level evaluation, not document-level.** The first version measured whether the right *file* showed up. With 14 documents, every strategy tied at 0.95 and the experiment told us nothing. Measuring the passage made the differences visible.
 
-**Chunking respeita a estrutura do Markdown.** Cortar por número de caracteres mistura assuntos dentro de um chunk. A divisão segue os cabeçalhos primeiro; o corte por tamanho só entra depois, com sobreposição para não perder o que cai na fronteira, preferindo quebrar em fim de parágrafo.
+**Chunking follows the Markdown structure.** Cutting by character count mixes topics inside a chunk. Splitting follows headings first; size-based cutting only kicks in afterward, with overlap so nothing that falls on a boundary is lost, preferring to break at the end of a paragraph.
 
-**Ingestão idempotente por hash.** Reprocessar a mesma pasta não duplica nem re-embeda o que não mudou — embedding custa dinheiro e tempo.
+**Idempotent ingestion by hash.** Reprocessing the same folder neither duplicates nor re-embeds anything that hasn't changed — embeddings cost money and time.
 
-**Provedor trocável por configuração.** Embeddings e LLM ficam atrás de módulos próprios (`app/embeddings.py`, `app/llm.py`). Qualquer API compatível com o padrão OpenAI — Groq, DeepSeek, Together, vLLM local — entra apontando `LLM_BASE_URL`, sem tocar em código de aplicação.
+**Provider swappable via configuration.** Embeddings and the LLM sit behind their own modules (`app/embeddings.py`, `app/llm.py`). Any OpenAI-compatible API — Groq, DeepSeek, Together, local vLLM — plugs in by pointing `LLM_BASE_URL` at it, without touching application code.
 
-**Reranking degrada, não derruba.** Se o provedor falha, o erro é registrado e a busca híbrida sozinha responde. Reranking é melhoria de qualidade, não requisito de disponibilidade.
+**Reranking degrades instead of failing.** If the provider fails, the error is logged and hybrid search alone answers. Reranking is a quality improvement, not an availability requirement.
 
 
-## Agente de RAG corretivo (LangGraph)
+## Corrective RAG agent (LangGraph)
 
-Além do pipeline direto (`POST /ask`), o projeto expõe um agente (`POST /agent`) orquestrado com **LangGraph**. A diferença é que ele não confia cegamente no que recuperou:
+Besides the direct pipeline (`POST /ask`), the project exposes an agent (`POST /agent`) orchestrated with **LangGraph**. The difference is that it doesn't blindly trust what it retrieved:
 
 ```
-START → retrieve → grade_documents ─┬─(nota ≥ 7)──────────→ generate → END
+START → retrieve → grade_documents ─┬─(score ≥ 7)─────────→ generate → END
                                     │
-                                    ├─(nota 2–6, com tentativas restantes)
+                                    ├─(score 2–6, attempts remaining)
                                     │        → rewrite → retrieve …
                                     │
-                                    └─(nota ≤ 1)──────────→ generate (recusa)
+                                    └─(score ≤ 1)─────────→ generate (refusal)
 ```
 
-Um nó avalia se o conjunto recuperado responde à pergunta. Se veio material relacionado mas incompleto, o agente reescreve a consulta com a terminologia que a documentação usaria e busca de novo, até um teto de tentativas. Se nada serve, responde que não encontrou em vez de sintetizar algo confiante e errado.
+One node judges whether the retrieved set answers the question. If the material is related but incomplete, the agent rewrites the query using the terminology the documentation would use and searches again, up to a maximum number of attempts. If nothing fits, it says it couldn't find the answer instead of synthesizing something confident and wrong.
 
-**Nota zero encerra na hora.** Nota zero significa que o assunto não existe no corpus — reescrever a consulta não cria documento. Medido: o caminho completo gastava **14,2 s** e duas chamadas extras de LLM para chegar exatamente na mesma recusa que agora sai em **5,9 s**. Reescrita só vale na faixa intermediária.
+**A score of zero ends it immediately.** Zero means the topic doesn't exist in the corpus — rewriting the query won't create a document. Measured: the full loop took **14.2 s** and two extra LLM calls to reach exactly the same refusal that now comes back in **5.9 s**. Rewriting only pays off in the middle band.
 
-`trace` devolve o caminho percorrido — qual consulta foi usada, que nota o material recebeu e por quê, o que foi reescrito. Sem isso, depurar por que uma resposta saiu ruim vira adivinhação.
+`trace` returns the path taken — which query was used, what score the material got and why, what was rewritten. Without it, debugging why an answer came out bad turns into guesswork.
 
-### O agente venceu o pipeline direto?
+### Did the agent beat the direct pipeline?
 
-Neste corpus, **não**. Medição ponta a ponta — a resposta contém o que deveria? — sobre as mesmas 20 perguntas, mais 4 perguntas cuja resposta não existe no corpus:
+On this corpus, **no**. End-to-end measurement — does the answer contain what it should? — over the same 20 questions, plus 4 questions whose answer isn't in the corpus:
 
-| modo | resposta correta | recusou quando devia | latência média |
+| mode | correct answer | refused when it should | avg. latency |
 |---|---|---|---|
-| pipeline direto | **13/20** | 4/4 | **4,4 s** |
-| agente corretivo | 12/20 | 4/4 | 5,8 s |
+| direct pipeline | **13/20** | 4/4 | **4.4 s** |
+| corrective agent | 12/20 | 4/4 | 5.8 s |
 
-Uma pergunta de diferença está dentro do ruído; a latência maior não está. O resultado faz sentido: **Corrective RAG serve para quando a recuperação falha**, e com 14 documentos e perguntas diretas a busca híbrida quase nunca falha — não há o que corrigir, só custo a pagar.
+A one-question difference is within noise; the higher latency isn't. The result makes sense: **Corrective RAG is for when retrieval fails**, and with 14 documents and straightforward questions, hybrid search almost never fails — there's nothing to correct, only a cost to pay.
 
-Onde o agente deve render, e o que eu mediria antes de adotá-lo em produção:
+Where the agent should pay off, and what I would measure before adopting it in production:
 
-- **corpus grande e heterogêneo**, em que a consulta do usuário raramente casa com a terminologia dos documentos;
-- **perguntas mal formuladas**, com abreviação, gíria interna ou termo ambíguo;
-- **domínios com vocabulário próprio**, em que a reescrita aproxima a consulta da linguagem do corpus.
+- **large, heterogeneous corpora**, where the user's query rarely matches the documents' terminology;
+- **poorly phrased questions**, with abbreviations, internal jargon, or ambiguous terms;
+- **domains with their own vocabulary**, where rewriting brings the query closer to the language of the corpus.
 
-A recusa correta em 4/4 saiu igual nos dois modos — a instrução no prompt de geração já resolvia isso, sem precisar de grafo. Também é informação útil: nem todo comportamento desejável precisa de orquestração.
+The correct refusal rate of 4/4 was the same in both modes — the instruction in the generation prompt already handled it, no graph needed. That's useful information too: not every desirable behavior needs orchestration.
 
 ## API
 
-| rota | o que faz |
+| route | what it does |
 |---|---|
-| `GET /health` | estado do banco e contagem de documentos, chunks e pendências |
-| `POST /ingest` | indexa uma pasta (`{"directory": "corpus"}`) |
-| `GET /search` | busca sem geração — `?q=&k=&mode=vector\|text\|hybrid&rerank_on=` |
-| `POST /ask` | pergunta com resposta citada (pipeline direto) |
-| `POST /agent` | agente corretivo em LangGraph, com `trace` do caminho percorrido |
+| `GET /health` | database status and counts of documents, chunks, and pending embeddings |
+| `POST /ingest` | indexes a folder (`{"directory": "corpus"}`) |
+| `GET /search` | search without generation — `?q=&k=&mode=vector\|text\|hybrid&rerank_on=` |
+| `POST /ask` | question with a cited answer (direct pipeline) |
+| `POST /agent` | corrective agent in LangGraph, with a `trace` of the path taken |
 
-Documentação interativa em `localhost:8000/docs`.
+Interactive docs at `localhost:8000/docs`.
 
-## Avaliação
+## Evaluation
 
 ```bash
-# qualidade da recuperação, por estratégia
+# retrieval quality, per strategy
 docker compose exec api python scripts/evaluate.py --questions eval/questions-en.json --k 5
 docker compose exec api python scripts/evaluate.py --questions eval/questions-pt.json --k 5
 
-# qualidade da resposta, ponta a ponta: pipeline direto vs agente
+# answer quality, end to end: direct pipeline vs. agent
 docker compose exec api python scripts/evaluate_agent.py --questions eval/questions-en.json
 ```
 
-Compara as quatro estratégias sobre o mesmo conjunto e grava em `eval/results/latest.json`. Sem isso, mexer no pipeline é chute: qualquer alteração parece boa em duas ou três perguntas escolhidas a dedo.
+`evaluate.py` compares the four retrieval strategies on the same question set, and `evaluate_agent.py` compares the two answer modes; both write their results to `eval/results/`. Without this, changing the pipeline is guesswork: any change looks good on two or three hand-picked questions.
 
-## Estrutura
+## Project structure
 
 ```
 app/
-  config.py       configuração central (env)
-  db.py           pool, schema e migração idempotente
-  chunking.py     divisão por cabeçalho + tamanho com sobreposição
-  embeddings.py   camada de embeddings, provedor trocável
-  search.py       busca vetorial, lexical e fusão RRF
-  rerank.py       reranking por LLM, paralelo, com degradação
-  generate.py     resposta ancorada com citações
-  ingest.py       ingestão idempotente por hash
-  llm.py          cliente de LLM agnóstico de provedor
-  graph.py        agente de RAG corretivo em LangGraph
-  main.py         API FastAPI
+  config.py       central configuration (env)
+  db.py           connection pool, schema, and idempotent migration
+  chunking.py     heading-based splitting + size-based cuts with overlap
+  embeddings.py   embeddings layer, swappable provider
+  search.py       vector search, lexical search, and RRF fusion
+  rerank.py       LLM reranking, parallel, with graceful degradation
+  generate.py     grounded answer with citations
+  ingest.py       idempotent ingestion by hash
+  llm.py          provider-agnostic LLM client
+  graph.py        corrective RAG agent in LangGraph
+  main.py         FastAPI app
 scripts/
-  fetch_corpus.py baixa a documentação pública usada como base
-  evaluate.py       recall@k e MRR por estratégia
-  evaluate_agent.py resposta correta e recusa, pipeline direto vs agente
+  fetch_corpus.py   downloads the public documentation used as the knowledge base
+  evaluate.py       recall@k and MRR per strategy
+  evaluate_agent.py correct answers and refusals, direct pipeline vs. agent
 eval/
-  questions-en.json / questions-pt.json   gabarito validado contra o corpus
+  questions-en.json / questions-pt.json   ground truth validated against the corpus
 ```
 
-## Limitações conhecidas
+## Known limitations
 
-- **Corpus pequeno** (14 documentos). Os números são consistentes, mas 20 perguntas têm margem de erro larga; a diferença entre 0,75 e 0,80 é de uma pergunta.
-- **Full-text preso a um idioma.** O dicionário do Postgres é fixado em `FTS_LANGUAGE`. Corpus multilíngue exigiria uma coluna `tsvector` por idioma.
-- **Reranking por LLM** é mais caro e mais lento que um cross-encoder dedicado. A escolha foi por portabilidade — roda com qualquer provedor, sem baixar modelo.
-- **Sem cache de embeddings de query.** Perguntas repetidas pagam o embedding de novo.
+- **Small corpus** (14 documents). The numbers are consistent, but 20 questions leave a wide margin of error; the difference between 0.75 and 0.80 is a single question.
+- **Full-text tied to one language.** The Postgres dictionary is fixed by `FTS_LANGUAGE`. A multilingual corpus would need one `tsvector` column per language.
+- **LLM reranking** is more expensive and slower than a dedicated cross-encoder. It was chosen for portability — it runs with any provider, with no model to download.
+- **No cache for query embeddings.** Repeated questions pay for the embedding again.
 
-## Base de conhecimento
+## Knowledge base
 
-O corpus é documentação pública, baixada pelo `scripts/fetch_corpus.py`: FastAPI (MIT), pgvector (PostgreSQL License), psycopg (LGPL) e Compose Specification (Apache 2.0). Escolhida por licença permissiva e por ser verificável — quem avalia consegue conferir se a resposta está certa.
+The corpus is public documentation, downloaded by `scripts/fetch_corpus.py`: FastAPI (MIT), pgvector (PostgreSQL License), psycopg (LGPL), and the Compose Specification (Apache 2.0). It was chosen for its permissive licenses and because it's verifiable — anyone evaluating the project can check whether an answer is right.
 
-O pipeline é agnóstico de domínio: aponte `/ingest` para qualquer pasta de `.md`, `.txt` ou `.rst`.
+The pipeline is domain-agnostic: point `/ingest` at any folder of `.md`, `.txt`, or `.rst` files.
 
 ## Stack
 
-Python · FastAPI · **LangGraph** · PostgreSQL 17 + pgvector · psycopg 3 · Docker Compose · OpenAI API (embeddings e LLM, trocáveis)
+Python · FastAPI · **LangGraph** · PostgreSQL 17 + pgvector · psycopg 3 · Docker Compose · OpenAI API (embeddings and LLM, swappable)
 
 ---
 
-Construído por [Fernando Niehues](https://www.linkedin.com/in/fernando-niehues/).
+Built by [Fernando Niehues](https://www.linkedin.com/in/fernando-niehues/).
